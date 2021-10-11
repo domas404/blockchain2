@@ -1,0 +1,1 @@
+# 2-oji užduotis. Supaprastintos blokų grandinės (blockchain) kūrimas.
