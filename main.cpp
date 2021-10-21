@@ -36,10 +36,18 @@ class user{
 };
 
 class transaction{
-    string id;
-    string sender;
-    string receiver;
-    double sum;
+    public:
+        string id;
+        string sender;
+        string receiver;
+        double sum;
+        transaction(string id, string sender, string receiver, double sum){
+            this->id = id;
+            this->sender = sender;
+            this->receiver = receiver;
+            this->sum = sum;
+        }
+        ~transaction(){};
 };
 
 double randomBalance(){
@@ -52,14 +60,19 @@ double randomKey(){
     static uniform_int_distribution<int> dist(0, 255);
     return dist(mt);
 }
+double randomUser(){
+    static mt19937 mt(static_cast<long unsigned int>(hrClock::now().time_since_epoch().count()));
+    static uniform_int_distribution<int> dist(0, 999);
+    return dist(mt);
+}
 
 string generateKey(){
     string key="";
     int tarp=0;
-    while(key.length()<64){
+    while(key.length() < 32){
         key += to_nBase(randomKey(), 16);
     }
-    if(key.length() > 16) key.pop_back();
+    if(key.length() > 32) key.pop_back();
     return key;
 }
 void generateUsers(vector<user> &users){
@@ -69,15 +82,31 @@ void generateUsers(vector<user> &users){
         users.push_back(user(name, randomBalance(), generateKey()));
         name="user";
     }
+}
 
+void generateTransactions(vector<transaction> &transactions, vector<user> &users){
+    int sender, receiver, balance;
+    string id="";
+    string hashed;
+    for(int i=0; i<10000; ++i){
+        sender = randomUser();
+        receiver = randomUser();
+        balance = randomBalance();
+        id += users[sender].public_key + users[receiver].public_key + to_string(balance);
+        hashed = hashfunc(id);
+        transactions.push_back(transaction(hashed, users[sender].public_key, users[receiver].public_key, balance));
+        id = "";
+    }
 }
 
 int main(){
     vector<user> users;
+    vector<transaction> transactions;
     generateUsers(users);
-    // vector<user>::iterator it=users.begin();
-    // for(it; it!=users.end(); ++it){
-    //     cout << (*it).getName() << " " << (*it).getBalance() << " " << (*it).public_key << endl;
-    // }
+    generateTransactions(transactions, users);
+
+    for(int i=0; i<50; ++i){
+        cout << transactions[i].id << " " << transactions[i].sender << " " << transactions[i].receiver << " " << transactions[i].sum << endl;
+    }
     return 0;
 }
