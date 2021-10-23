@@ -53,9 +53,9 @@ class block{
         float version;
         string merkleroot;
         int nonce;
-        string dif_target;
+        float dif_target;
         vector<transaction> transactions;
-        block(string prev_hash, time_t timestamp, float version, string merkleroot, int nonce, string dif_target, vector<transaction> transactions){
+        block(string prev_hash, time_t timestamp, float version, string merkleroot, int nonce, float dif_target, vector<transaction> transactions){
             this->prev_hash = prev_hash;
             this->timestamp = timestamp;
             this->version = version;
@@ -131,37 +131,104 @@ void generateTransactions(vector<transaction> &transactions, vector<user> &users
     }
 }
 
-void createBlock(vector<transaction> &transactions){
-    vector<transaction> trans;
-    vector<block> blockchain;
-    string line="";
-    string merkleroot;
-    string tran="";
-    string prev_hash="0000";
-    float version = 1;
-    int nonce=0;
-    string dif_target;
-    int n=100;
+string to_lil_endian(string big_end){
+    int n=big_end.length();
+    string lil_end="";
+    if(n%2!=0){
+        big_end += "0";
+    }
+    while(n > 0){
+        lil_end += big_end[n-2];
+        lil_end += big_end[n-1];
+        n -= 2;
+    }
+    return lil_end;
+}
 
-    for(int i=0; i<100; ++i){
-        trans.assign(transactions.begin()+n-100, transactions.begin()+n);
-        for(int i=n-100; i<n; ++i){
-            tran += transactions[i].id;
-        }
-        merkleroot = sha256(tran);
-        n += 100;
-        dif_target = sha256(merkleroot+to_string(nonce));
-        ++nonce;
-        while((dif_target[0] != '0') || (dif_target[1] != '0') || (dif_target[2] != '0') || (dif_target[3] != '0')){
-            dif_target = sha256(merkleroot+to_string(nonce));
-            ++nonce;
-        }
+void merkle_hash(vector<transaction> &transactions, vector<transaction> &trans, int n, string &merkleroot){ 
+    string tran="";              // continious string of all transactions within a block
+
+    trans.assign(transactions.begin()+n-100, transactions.begin()+n);
+    for(int i=n-100; i<n; ++i)
+        tran += transactions[i].id;
+    n += 100;
+    merkleroot = sha256(tran);
+}
+
+void createBlock(vector<transaction> &transactions){
+    vector<block> blockchain;
+    vector<transaction> trans;   // transactions within a single block
+
+    float version = 1;
+    string prev_hash="0000000000000000000000000000000000000000000000000000000000000000";
+    string merkleroot;           // transactions hash
+    time_t timestamp;
+    float dif_target=10000;
+    int nonce=0;
+    
+    int n=100;
+    string header="";
+    string header_hash="";
+    string prev_block_hash;
+    
+    string header_line1, header_line2;
+    double time_taken;
+    
+    for(int i=0; i<10; ++i){
+        merkle_hash(transactions, trans, n, merkleroot);
+        // ++nonce;
+        auto pr = chrono::high_resolution_clock::now();
         if(i == 0){
+            header = (
+                to_lil_endian(to_nBase(int(version), 16)) +
+                to_lil_endian(prev_hash) +
+                to_lil_endian(merkleroot)
+            );
+            do{
+                ++nonce;
+                header_hash = sha256(
+                    header +
+                    to_lil_endian(to_nBase((int)time(nullptr), 16)) +
+                    to_lil_endian(to_nBase(dif_target, 16)) +
+                    to_lil_endian(to_nBase(nonce, 16))
+                );
+            } while((header_hash[0] != '0') || (header_hash[1] != '0') || (header_hash[2] != '0') || (header_hash[3] != '0') || (header_hash[4] != '0'));
+            
             blockchain.push_back(block(prev_hash, time(nullptr), version, merkleroot, nonce, dif_target, trans));
         }
         else {
-            blockchain.push_back(block(blockchain[i-1].dif_target, time(nullptr), version, merkleroot, nonce, dif_target, trans));
+            header_line2 = (
+                to_lil_endian(to_nBase((int)blockchain[i-1].version, 16)) +
+                to_lil_endian(blockchain[i-1].prev_hash) +
+                to_lil_endian(blockchain[i-1].merkleroot) +
+                to_lil_endian(to_nBase((int)blockchain[i-1].timestamp, 16)) +
+                to_lil_endian(to_nBase(blockchain[i-1].dif_target, 16)) +
+                to_lil_endian(to_nBase(blockchain[i-1].nonce, 16))
+            );
+            prev_block_hash = sha256(header_line2);
+            
+            header = (
+                to_lil_endian(to_nBase(int(version), 16)) +
+                to_lil_endian(prev_block_hash) +
+                to_lil_endian(merkleroot)
+            );
+            
+            do{
+                ++nonce;
+                header_line1 = (
+                    header +
+                    to_lil_endian(to_nBase((int)time(nullptr), 16)) +
+                    to_lil_endian(to_nBase(dif_target, 16)) +
+                    to_lil_endian(to_nBase(nonce, 16))
+                );
+                header_hash = sha256(header_line1);
+            } while((header_hash[0] != '0') || (header_hash[1] != '0') || (header_hash[2] != '0') || (header_hash[3] != '0') || (header_hash[4] != '0'));
+            
+            blockchain.push_back(block(prev_block_hash, time(nullptr), version, merkleroot, nonce, dif_target, trans));
         }
+        auto pab = chrono::high_resolution_clock::now();
+        time_taken = chrono::duration_cast<chrono::nanoseconds>(pab - pr).count();
+        time_taken *= 1e-9;
         cout << "\nBlock number: " << i+1 << endl;
         cout << "Previous hash: " << blockchain[i].prev_hash << endl;
         cout << "Timestamp: " << blockchain[i].timestamp << endl;
@@ -169,13 +236,15 @@ void createBlock(vector<transaction> &transactions){
         cout << "Merkleroot: " << blockchain[i].merkleroot << endl;
         cout << "Nonce: " << blockchain[i].nonce << endl;
         cout << "Difficulty target: " << blockchain[i].dif_target << endl;
+        cout << "Block hash: " << header_hash << endl;
+        cout << "Time since last block: " << time_taken << " s" << endl;
         // cout << "\nTransaction list: " << endl;
         // for(int i=0; i<100; ++i){
         //     cout << blockchain[0].transactions[i].id << "\n";
         // }
-        tran="";
-        trans.clear();
+        header_hash = "";
         nonce=0;
+        n += 100;
     }
 }
 
