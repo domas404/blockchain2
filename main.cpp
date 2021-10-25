@@ -12,7 +12,6 @@
 using namespace std;
 using hrClock = chrono::high_resolution_clock;
 
-
 class user{
     private:
         string name;
@@ -54,9 +53,9 @@ class block{
         float version;
         string merkleroot;
         int nonce;
-        float dif_target;
+        int dif_target;
         vector<transaction> transactions;
-        block(string prev_hash, time_t timestamp, float version, string merkleroot, int nonce, float dif_target, vector<transaction> transactions){
+        block(string prev_hash, time_t timestamp, float version, string merkleroot, int nonce, int dif_target, vector<transaction> transactions){
             this->prev_hash = prev_hash;
             this->timestamp = timestamp;
             this->version = version;
@@ -69,6 +68,7 @@ class block{
         ~block(){};
 };
 
+// random funkcijos
 double randomBalance(){
     static mt19937 mt(static_cast<long unsigned int>(hrClock::now().time_since_epoch().count()));
     static uniform_int_distribution<int> dist(100, 1000000);
@@ -90,6 +90,7 @@ double randomUser(){
     return dist(mt);
 }
 
+// user'iu generavimas
 string generateKey(){
     string key="";
     int tarp=0;
@@ -122,6 +123,7 @@ void readUsers(vector<user> &users){
     input.close();
 }
 
+// tranzakciju generavimas
 void generateTransactions(vector<transaction> &transactions, vector<user> &users){
     int sender, receiver, balance;
     string id="";
@@ -137,11 +139,13 @@ void generateTransactions(vector<transaction> &transactions, vector<user> &users
     }
 }
 
+// hex kodo uzrasymas little endian budu
 string to_lil_endian(string big_end){
     int n=big_end.length();
     string lil_end="";
     if(n%2!=0){
         big_end += "0";
+        ++n;
     }
     while(n > 0){
         lil_end += big_end[n-2];
@@ -151,16 +155,16 @@ string to_lil_endian(string big_end){
     return lil_end;
 }
 
-void merkle_hash(vector<transaction> &transactions, vector<transaction> &trans, string &merkleroot){ 
+// transakciju hash'u eilutes hash'avimas
+void merkle_hash(vector<transaction> &transactions, string &merkleroot){ 
     string tran="";              // continious string of all transactions within a block
-
-    trans.assign(transactions.begin(), transactions.begin()+100);
     for(int i=0; i<100; ++i)
         tran += transactions[i].id;
 
     merkleroot = sha256(tran);
 }
 
+// ivykdomos transakcijos, jei siuntejas turi pakankama balansa
 void executeTransactions(vector<transaction> &transactions, vector<user> &users){
     vector<user>::iterator it;
     vector<user>::iterator rec;
@@ -192,15 +196,18 @@ void executeTransactions(vector<transaction> &transactions, vector<user> &users)
     // cout << successful << " successful transactions out of 100" << endl;
 }
 
+// kasami blokai
 void createBlock(vector<transaction> &transactions, vector<user> &users){
     vector<block> blockchain;
     vector<transaction> trans;   // transactions within a single block
 
     float version = 1;
-    string prev_hash="0000000000000000000000000000000000000000000000000000000000000000";
-    string merkleroot;           // transactions hash
+    string prev_hash="0000000000000000000000000000000000000000000000000000000000000000"; // prev hash for genesis block
+    string merkleroot;       // transactions hash
     time_t timestamp;
-    float dif_target=10000;
+    int dif_target=100;
+    string difficulty = to_lil_endian("0" + to_string(dif_target));
+    cout << difficulty << " " << difficulty.length() << endl;
     int nonce=0;
     
     string header="";
@@ -212,11 +219,13 @@ void createBlock(vector<transaction> &transactions, vector<user> &users){
     
     ofstream blocks("blocks.txt");
 
-    for(int i=0; i<10; ++i){
+    for(int i=0; i<100; ++i){
         // ++nonce;
         auto pr = chrono::high_resolution_clock::now();
+        trans.assign(transactions.begin(), transactions.begin()+100);
         executeTransactions(trans, users);
-        merkle_hash(transactions, trans, merkleroot);
+        merkle_hash(transactions, merkleroot);
+        // mining genesis block
         if(i == 0){
             header = (
                 to_lil_endian(to_nBase(int(version), 16)) +
@@ -231,10 +240,11 @@ void createBlock(vector<transaction> &transactions, vector<user> &users){
                     to_lil_endian(to_nBase(dif_target, 16)) +
                     to_lil_endian(to_nBase(nonce, 16))
                 );
-            } while((header_hash[0] != '0') || (header_hash[1] != '0') || (header_hash[2] != '0') || (header_hash[3] != '0')/* || (header_hash[4] != '0')*/);
+            } while(difficulty.compare(header_hash) < 0);
             
             blockchain.push_back(block(prev_hash, time(nullptr), version, merkleroot, nonce, dif_target, trans));
         }
+        // mining other blocks
         else {
             header_line2 = (
                 to_lil_endian(to_nBase((int)blockchain[i-1].version, 16)) +
@@ -261,13 +271,14 @@ void createBlock(vector<transaction> &transactions, vector<user> &users){
                     to_lil_endian(to_nBase(nonce, 16))
                 );
                 header_hash = sha256(header_line1);
-            } while((header_hash[0] != '0') || (header_hash[1] != '0') || (header_hash[2] != '0') || (header_hash[3] != '0')/* || (header_hash[4] != '0')*/);
+            } while(difficulty.compare(header_hash) < 0);
             
             blockchain.push_back(block(prev_block_hash, time(nullptr), version, merkleroot, nonce, dif_target, trans));
         }
         auto pab = chrono::high_resolution_clock::now();
         time_taken = chrono::duration_cast<chrono::nanoseconds>(pab - pr).count();
         time_taken *= 1e-9;
+
         cout << "\nBlock number: " << i+1 << endl;
         cout << "Previous hash: " << blockchain[i].prev_hash << endl;
         cout << "Timestamp: " << blockchain[i].timestamp << endl;
@@ -278,17 +289,9 @@ void createBlock(vector<transaction> &transactions, vector<user> &users){
         cout << "Block hash: " << header_hash << endl;
         cout << "Time since last block: " << time_taken << " s" << endl;
         cout << "Number of transactions: " << trans.size() << endl;
-        // for(int j=0; j<100; ++j){
-        //     blocks << blockchain[i].transactions[j].sender << " " << blockchain[i].transactions[j].receiver << " "
-        //     << blockchain[i].transactions[j].sum << endl;
-        // }
-        // cout << "\nTransaction list: " << endl;
-        // for(int i=0; i<100; ++i){
-        //     cout << blockchain[0].transactions[i].id << "\n";
-        // }
+
         header_hash = "";
         nonce=0;
-
         trans.clear();
         transactions.erase(transactions.begin(), transactions.begin()+100);
     }
@@ -316,11 +319,7 @@ int main(){
     
     readUsers(users);
     generateTransactions(transactions, users);
-
     createBlock(transactions, users);
-    outputUsers("after_mining.txt", users);
-    // for(int i=0; i<50; ++i){
-    //     cout << transactions[i].id << " " << transactions[i].sender << " " << transactions[i].receiver << " " << transactions[i].sum << endl;
-    // }
+
     return 0;
 }
