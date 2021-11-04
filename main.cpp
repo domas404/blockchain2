@@ -150,15 +150,12 @@ void readUsers(vector<user> &users){
 void generateTransactions(vector<transaction> &transactions, vector<user> &users){
     int sender, receiver, balance;
     string id="";
-    string hashed;
     for(int i=0; i<10000; ++i){
         sender = randomUser();
         receiver = randomUser();
         balance = randomSum();
-        id += users[sender].public_key + users[receiver].public_key + to_string(balance);
-        hashed = sha256(id);
-        transactions.push_back(transaction(hashed, users[sender].public_key, users[receiver].public_key, balance));
-        id = "";
+        id = users[sender].public_key + users[receiver].public_key + to_string(balance);
+        transactions.push_back(transaction(sha256(id), users[sender].public_key, users[receiver].public_key, balance));
     }
     cout << "Successfully generated 10'000 transactions." << endl;
 }
@@ -220,6 +217,19 @@ void merkle_root(vector<transaction> &transactions, string &root){
     root = blocks[0]->hash;
 }
 
+// tikrinama ar transakcijos nesuklastotos
+void checkTransactions(vector<transaction> &transactions){
+    int validated=0;
+    for(vector<transaction>::iterator it=transactions.begin(); it!=transactions.end(); ++it){
+        if((*it).id == sha256(((*it).sender + (*it).receiver + to_string((int)(*it).sum))))
+            validated++;
+        else
+            cout << "Transaction " << (*it).id << " is invalid." << endl;
+    }
+    if(validated == transactions.size()){
+        cout << "All transactions have been validated." << endl;
+    }
+}
 // ivykdomos transakcijos, jei siuntejas turi pakankama balansa
 void executeTransactions(vector<transaction> &transactions, vector<user> &users){
     vector<user>::iterator it;
@@ -391,6 +401,7 @@ int main(){
     
     readUsers(users);
     generateTransactions(transactions, users);
+    checkTransactions(transactions);
 
     createBlock(blockchain, transactions, users);
 
