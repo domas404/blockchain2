@@ -15,7 +15,21 @@
 4. Pradedamas bloko kasimo procesas. Pasinaudojant openMP, vienu metu pradedami kasti 5 individualūs blokai.
 Kasimui skiriamos 5 sekundės. Jei nė vienas *thread*'as neranda bloko per 5 sekundes, laiko limitas pratęsiamas iki 10 sekundžių.
 
-5. Į blokų grandinę pridedamas greičiausiai surastas blokas (iš 5 potencialių).
+5. Į blokų grandinę pridedamas greičiausiai surastas blokas (iš 5 potencialių), ir įvykdomos transakcijos, kurios po to yra ištrinamos iš transakcijų pool'o.
+
+### Bloko kasimas
+
+#### Kiekvienas blokas saugo šią informaciją apie save:
+* ankstesnio bloko hash'as;
+* laiko žymė;
+* versija;
+* transakcijų *Merkle* medžio *root* reikšmė;
+* nonce;
+* difficulty;
+* transakcijas saugantis vektorius;
+
+#### Bloko *hash*'as
+* Bloko hash'o skaičiavimui naudojamas string'as su visa bloko header'io informacija, kuri prieš tai paverčiama *little endian* seka.
 
 **Note:** hash'avimui naudojama *sha256* funkcijos implementacija, nes ankščiau sukurta *hash* funkcija nėra pakankamai
 efektyvi, kad galėtų būti naudojama blokų kasimui.
