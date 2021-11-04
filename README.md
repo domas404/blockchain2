@@ -1,35 +1,24 @@
-# 2-oji užduotis. Supaprastintos blokų grandinės (blockchain) kūrimas.
+# Supaprastintos blokų grandinės (blockchain) kūrimas.
 
 ## Programos veikimas
 
-1. Pirmiausiai programa sugeneruoja **1000** vartotojų, kurie turi šiuos atributus:
+1. Programa sugeneruoja **1000** vartotojų, kurie turi šiuos atributus:
     * name;
     * public key;
     * balance.
-2. Tada sugeneruojama **10'000** tranzakcijų, tutinčių šiuos atributus:
-    * id (hash of sender's and receiver's public keys and sum);
+2. Sugeneruojamos **10'000** transakcijų, turinčių šiuos atributus:
+    * id (hash of sender's and receiver's public keys and sum transfered);
     * sender's public key;
     * receiver's public key;
-    * sum;
-3. Tikrinamos pirmos **100** tranzakcijų, iš kurių visos sėkmingos bus priskirtos naujam blokui (tikrinama ar siuntėjo
-norima persiųsti suma yra ne didesnė už jo sąskaitos balansą).
-4. Pradedamas bloko kasimo procesas (ieškoma nonce vertė, pagal nurodytą *difficulty target*).
-5. Naujai iškastas blokas pridedamas į blokų grandinę.
+    * sum transfered;
+3. Tikrinamos ir validuojamos nesuklastotos transakcijos. Taip pat tikrinama ar siuntėjo norima persiųsti suma yra ne didesnė už jo sąskaitos balansą. Sėkmingos transakcijos bus priskirtos naujam blokui.
+4. Pradedamas bloko kasimo procesas. Pasinaudojant openMP, vienu metu pradedami kasti 5 individualūs blokai.
+Kasimui skiriamos 5 sekundės. Jei nė vienas *thread*'as neranda bloko per 5 sekundes, laiko limitas pratęsiamas iki 10 sekundžių.
 
-**Note:** hash'avimui naudojama *sha256* funkcijos implementacija, nes ankščiau kurta *hash* funkcija nėra pakankamai
+5. Į blokų grandinę pridedamas greičiausiai surastas blokas (iš 5 potencialių).
+
+**Note:** hash'avimui naudojama *sha256* funkcijos implementacija, nes ankščiau sukurta *hash* funkcija nėra pakankamai
 efektyvi, kad galėtų būti naudojama blokų kasimui.
 
 ### Konsolėje rodoma ši informacija apie iškastą bloką:
-* Block number (height);
-* Previous block hash;
-* Timestamp;
-* Version;
-* Merkleroot (transactions string line hash);
-* Nonce;
-* Difficulty;
-* Block hash;
-* Time since when last block was mined;
-* Number of transactions within a block;
-
-PVZ:
 ![block info](pvz.png)

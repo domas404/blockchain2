@@ -1,94 +1,30 @@
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <chrono>
-#include <random>
-#include <ctime>
-#include <algorithm>
-#include <time.h>
-#include "hash.cpp"
+#include "header.h"
 #include "sha256.h"
 #include "omp.h"
-#include <iomanip>
 
-using namespace std;
-using hrClock = chrono::high_resolution_clock;
+// desimtainio sk konvertavimas i n-taine sk sistema
+string to_nBase(int num, int n){
+    string el = "0123456789abcdef";
+    vector<int> liek;
+    string fnum="";
+    int z=0;
+    int dal;
+    do{
+        dal = num/n;
+        liek.push_back(num%n);
+        num = dal;
+        z++;
+    } while(num>0);
 
-class user{
-    private:
-        string name;
-        double balance;
-    public:
-        user(string name, double balance, string key){
-            this->name = name;
-            this->balance = balance;
-            public_key = key;
+    if(n==2 && liek.size()<8){
+        for(int i=0; i<8-liek.size(); ++i){
+            fnum += "0";
         }
-        string public_key;
-        void setName(string name){ this->name = name; }
-        void setBalance(double balance){this->balance = balance; }
-        string getName() const { return name; }
-        double getBalance() const { return balance; }
-
-        ~user(){};
-};
-
-class transaction{
-    public:
-        string id;
-        string sender;
-        string receiver;
-        double sum;
-        transaction(string id, string sender, string receiver, double sum){
-            this->id = id;
-            this->sender = sender;
-            this->receiver = receiver;
-            this->sum = sum;
-        }
-        ~transaction(){};
-};
-
-class block{ 
-    public:
-        string prev_hash;
-        time_t timestamp;
-        float version;
-        string merkleroot;
-        int nonce;
-        int dif_target;
-        vector<transaction> transactions;
-        block(string prev_hash, time_t timestamp, float version, string merkleroot, int nonce, int dif_target, vector<transaction> transactions){
-            this->prev_hash = prev_hash;
-            this->timestamp = timestamp;
-            this->version = version;
-            this->merkleroot = merkleroot;
-            this->nonce = nonce;
-            this->dif_target = dif_target;
-            this->transactions = transactions;
-        }
-        ~block(){};
-};
-
-class queue: public block{
-    public:
-        int a;
-        double time;
-        int num_transact;
-        int num_thread;
-        string block_hash;
-        queue(string prev_hash, time_t timestamp, float version, string merkleroot, int nonce, int dif_target,
-        vector<transaction> transactions, int a, double time, int num_transact, string block_hash, int num_thread)
-        : block(prev_hash, timestamp, version, merkleroot, nonce, dif_target, transactions){
-            this->a = a;
-            this->time = time;
-            this-> num_transact = num_transact;
-            this->block_hash = block_hash;
-            this->num_thread = num_thread;
-        }
-        ~queue(){};
-};
-
-const float version = 1;
+    }
+    for (int j=z-1; j>=0; j--)
+        fnum += el[liek[j]];
+    return fnum;
+}
 
 // random funkcijos
 double randomBalance(){
@@ -176,15 +112,6 @@ string to_lil_endian(string big_end){
     return lil_end;
 }
 
-// merkle tree nodes
-struct node{
-    string hash;
-    node *left;
-    node *right;
-    node(string hash){
-        this->hash = hash;
-    }
-};
 // merkle root apskaiciuojanti funkcija
 void merkle_root(vector<transaction> &transactions, string &root){
     vector<node*> blocks;
