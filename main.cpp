@@ -9,6 +9,7 @@
 #include "hash.cpp"
 #include "sha256.h"
 #include "omp.h"
+#include <iomanip>
 
 using namespace std;
 using hrClock = chrono::high_resolution_clock;
@@ -64,7 +65,6 @@ class block{
             this->nonce = nonce;
             this->dif_target = dif_target;
             this->transactions = transactions;
-            // copy(transactions.begin(), transactions.end(), this->transactions.begin());
         }
         ~block(){};
 };
@@ -132,6 +132,7 @@ void generateUsers(){
         u << "\n" << name << " " << randomBalance() << " " << generateKey();
         // users.push_back(user(name, randomBalance(), generateKey()));
     }
+    cout << "Successfully generated 1'000 users." << endl;
     u.close();
 }
 void readUsers(vector<user> &users){
@@ -159,6 +160,7 @@ void generateTransactions(vector<transaction> &transactions, vector<user> &users
         transactions.push_back(transaction(hashed, users[sender].public_key, users[receiver].public_key, balance));
         id = "";
     }
+    cout << "Successfully generated 10'000 transactions." << endl;
 }
 
 // hex kodo uzrasymas little endian budu
@@ -177,19 +179,50 @@ string to_lil_endian(string big_end){
     return lil_end;
 }
 
-// transakciju hash'u eilutes hash'avimas
-void merkle_hash(vector<transaction> &transactions, string &merkleroot){ 
-    string tran="";              // continious string of all transactions within a block
-    for(int i=0; i<transactions.size(); ++i)
-        tran += transactions[i].id;
-
-    merkleroot = sha256(tran);
+// merkle tree nodes
+struct node{
+    string hash;
+    node *left;
+    node *right;
+    node(string hash){
+        this->hash = hash;
+    }
+};
+// merkle root apskaiciuojanti funkcija
+void merkle_root(vector<transaction> &transactions, string &root){
+    vector<node*> blocks;
+    for(int i=0; i<transactions.size(); ++i){
+        blocks.push_back(new node(sha256(transactions[i].id)));
+    }
+    for(int i=0; i<blocks.size(); ++i){
+        blocks[i]->left = NULL;
+        blocks[i]->right = NULL;
+    }
+    vector<node*> nodes;
+    int j=0, n;
+    while(blocks.size() != 1){
+        n=blocks.size();
+        if(n%2 != 0){
+            blocks.push_back(new node(blocks[n-1]->hash));
+            blocks[n-1]->left = blocks[n-2]->left;
+            blocks[n-1]->right = blocks[n-2]->right;
+        }
+        for(int i=0; i < blocks.size(); i+=2){
+            nodes.push_back(new node(sha256(blocks[i]->hash + blocks[i+1]->hash)));
+            nodes[j]->left = blocks[i];
+            nodes[j]->right = blocks[i+1];
+            j++;
+        }
+        blocks = nodes;
+        nodes.clear();
+        j=0;
+    }
+    root = blocks[0]->hash;
 }
 
 // ivykdomos transakcijos, jei siuntejas turi pakankama balansa
 void executeTransactions(vector<transaction> &transactions, vector<user> &users){
     vector<user>::iterator it;
-    vector<user>::iterator rec;
     int i=transactions.size()-1;
     int successful=0;
     while(i>=0){
@@ -207,7 +240,6 @@ void executeTransactions(vector<transaction> &transactions, vector<user> &users)
                     break;
                 }
                 else{
-                    // cout << (*it).getBalance() << " is not enough for transaction of " << transactions[i].sum << endl;
                     transactions.erase(transactions.begin()+i);
                     break;
                 }
@@ -215,23 +247,25 @@ void executeTransactions(vector<transaction> &transactions, vector<user> &users)
         }
         --i;
     }
-    // cout << successful << " successful transactions out of 100" << endl;
 }
 
 // spausdinami blokai
 void outputBlocks(int height, queue &line, double time_taken){
-    cout << "\nBlock height: " << height << endl;
-    cout << "Previous hash: " << line.prev_hash << endl;
-    cout << "Timestamp: " << line.timestamp << endl;
-    cout << "Version: " << line.version << endl;
-    cout << "Merkleroot: " << line.merkleroot << endl;
-    cout << "Nonce: " << line.nonce << endl;
-    cout << "Difficulty target: " << line.dif_target << endl;
-    cout << "Block hash: " << line.block_hash << endl;
-    cout << "Time spent mining: " << line.time << " s" << endl;
-    cout << "Number of transactions: " << line.num_transact << endl;
-    cout << "Thread that mined the block: " << line.num_thread << endl;
-    cout << "Time since last block: " << time_taken << endl;
+    cout << "\n" << setw(32) << right << "Block height: " << height << endl;
+    cout << setw(32) << right << "Previous block hash: " << line.prev_hash << endl;
+    struct tm * timeinfo;
+    timeinfo = localtime(&line.timestamp);
+
+    cout << setw(32) << right << "Timestamp: " << asctime(timeinfo);
+    cout << setw(32) << right << "Version: " << "0x" << line.version << endl;
+    cout << setw(32) << right << "Merkleroot: " << line.merkleroot << endl;
+    cout << setw(32) << right << "Nonce: " << line.nonce << endl;
+    cout << setw(32) << right << "Difficulty target: " << line.dif_target << endl;
+    cout << setw(32) << right << "Block hash: " << line.block_hash << endl;
+    cout << setw(32) << right << "Block mined in: " << line.time << " s" << endl;
+    cout << setw(32) << right << "Number of transactions: " << line.num_transact << endl;
+    cout << setw(32) << right << "Thread that mined the block: " << line.num_thread << endl;
+    cout << setw(32) << right << "Time since last block: " << time_taken << endl;
 }
 
 //kasami blokai
@@ -246,7 +280,7 @@ void mineBlock(vector<transaction> &transactions, vector<user> &users, vector<qu
     a = rand()%(transactions.size()-100);
     trans.assign(transactions.begin()+a, transactions.begin()+a+100);
     executeTransactions(trans, users);
-    merkle_hash(trans, merkleroot);
+    merkle_root(trans, merkleroot);
 
     time_t timestamp;
     string difficulty = "00001"; // to_lil_endian(to_string(dif_target));
@@ -306,17 +340,17 @@ void createBlock(vector<block> &blockchain, vector<transaction> &transactions, v
     
     for(int i=1; i<100; ++i){
         auto pr = chrono::high_resolution_clock::now();
+        prev_block_hash = sha256(
+            to_lil_endian(to_nBase((int)blockchain[i-1].version, 16)) +
+            to_lil_endian(blockchain[i-1].prev_hash) +
+            to_lil_endian(blockchain[i-1].merkleroot) +
+            to_lil_endian(to_nBase((int)blockchain[i-1].timestamp, 16)) +
+            to_lil_endian(to_nBase(blockchain[i-1].dif_target, 16)) +
+            to_lil_endian(to_nBase(blockchain[i-1].nonce, 16))
+        );
         #pragma omp parallel
         {
-            int a;
-            prev_block_hash = sha256(
-                to_lil_endian(to_nBase((int)blockchain[i-1].version, 16)) +
-                to_lil_endian(blockchain[i-1].prev_hash) +
-                to_lil_endian(blockchain[i-1].merkleroot) +
-                to_lil_endian(to_nBase((int)blockchain[i-1].timestamp, 16)) +
-                to_lil_endian(to_nBase(blockchain[i-1].dif_target, 16)) +
-                to_lil_endian(to_nBase(blockchain[i-1].nonce, 16))
-            );
+            int a; // iterator to locate which transactions were added to a block
             mineBlock(transactions, users, line, a, prev_block_hash, time_limit);
         }
         auto pab = chrono::high_resolution_clock::now();
@@ -335,8 +369,7 @@ void createBlock(vector<block> &blockchain, vector<transaction> &transactions, v
         }
         blockchain.push_back(block(line[0].prev_hash, line[0].timestamp, line[0].version, line[0].merkleroot, line[0].nonce, line[0].dif_target, line[0].transactions));
         outputBlocks(i+1, line[0], time_taken);
-        cout << "Thread that mined the block: " << line[0].num_thread << endl;
-        cout << "Time since last block: " << time_taken << endl;
+
         transactions.erase(transactions.begin()+line[0].a, transactions.begin()+line[0].a+100);
         time_limit = 5;
         time_taken = 0;
